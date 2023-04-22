@@ -3,6 +3,14 @@ import json # Библиотека для работы с json
 import psycopg2 # Библиотека для работы с Postgresql
 from neo4j import GraphDatabase
 
+driver = GraphDatabase.driver("neo4j://localhost:7687", auth=("12345678", "12345678"))
+def run_query(query):
+    # Используем контекстный менеджер для управления сессией
+    with driver.session() as session:
+        # Выполняем запрос и возвращаем результат
+        return session.run(query)
+
+
 # Создаем соединение
 conn = psycopg2.connect(
     host="localhost",
@@ -88,38 +96,89 @@ for i in range(len(all_as_data['data']['asns'])):
         conn.commit()
         count = cur.rowcount
         print(count, "Запись успешно добавлена в таблицу users")
+        query = ""
+        for p in path:
+            print(p)
+            query = query + "MERGE (AS" + str(p) + ":ASN {name: 'AS" + str(p) + "'})\n"
+        for k in range(len(path) - 1):
+            query = query + "MERGE (AS" + str(path[k]) + ")-[:CONNECTED]-(AS" + str(path[k + 1]) + ")\n"
+            # query = query + "CREATE (AS"+str(path[0])+")-[:CONNECTED]->(AS"+str(path[1])+")\n"
+        print(query)
+        result = run_query(query)
+
+#ТЕСТОВЫЙ КОД УДАЛЯТЬ ТУТ---------------------------------------------------------------
+# url = 'https://stat.ripe.net/data/bgp-state/data.json?resource=AS2002'
+#     #Выполняется запрос
+# response = requests.get(url)
+#     #Ответ запроса преобразуется в json
+# data = response.json()
+#     #ASN
+# current_as = data['data']['resource']
+#     #Время записи
+# timestamp=data['time']
+# print(timestamp)
+# for j in range(len(data['data']['bgp_state'])):
+#         #Префикс
+#     prefix = data['data']['bgp_state'][j]['target_prefix']
+#         #Source id
+#     source_id = data['data']['bgp_state'][j]['source_id']
+#         #Путь
+#     path = data['data']['bgp_state'][j]['path']
+#         #Путь преобразуется в массив для записи в бд
+#     path_array = "{" + ", ".join(str(x) for x in path) + "}"
+#
+#     query = ""
+#     for p in path:
+#         print(p)
+#         query = query + "MERGE (AS" + str(p) + ":ASN {name: 'AS" + str(p) + "'})\n"
+#     for i in range(len(path) - 1):
+#         query = query + "MERGE (AS" + str(path[i]) + ")-[:CONNECTED]->(AS" + str(path[i + 1]) + ")\n"
+#         # query = query + "CREATE (AS"+str(path[0])+")-[:CONNECTED]->(AS"+str(path[1])+")\n"
+#     print(query)
+#     result = run_query(query)
+        #Формируется запись
+        #record_to_insert = (current_as, prefix,source_id, timestamp, path_array)
+        #Создается запрос
+        #cur.execute(insert_query, record_to_insert)
+        #Выполняется соединение
+        #conn.commit()
+        #count = cur.rowcount
+        #print(count, "Запись успешно добавлена в таблицу users")
+
+#ТЕСТОВЫЙ КОД УДАЛЯТЬ ТУТ---------------------------------------------------------------
 
 
 
-
-#cur.execute("""INSERT INTO autonomous_system VALUES('2002', '192.168.111.1/24', s');""")
-cur.close()
-conn.close()
+#РАСКОМЕНДИТЬ ТУТ----------------------------------!!!!!!!!!!!!!1-------------------------
+#cur.close()
+#conn.close()
 
 
 
 #тест
 
-driver = GraphDatabase.driver("neo4j://localhost:7687", auth=("12345678", "12345678"))
-def run_query(query):
-    # Используем контекстный менеджер для управления сессией
-    with driver.session() as session:
-        # Выполняем запрос и возвращаем результат
-        return session.run(query)
 
 # Пример запроса для создания узлов и связей в графе
 
-query = """
-CREATE (alice:Person {name: 'Alice', age: 25})
-CREATE (bob:Person {name: 'Bob', age: 30})
-CREATE (carol:Person {name: 'Carol', age: 35})
-CREATE (alice)-[:FRIENDS_WITH]->(bob)
-CREATE (bob)-[:FRIENDS_WITH]->(carol)
-RETURN alice, bob, carol
-"""
-
+# query = """
+# CREATE (alice:Person {name: 'Alice', age: 25})
+# CREATE (bob:Person {name: 'Bob', age: 30})
+# CREATE (carol:Person {name: 'Carol', age: 35})
+# CREATE (alice)-[:FRIENDS_WITH]->(bob)
+# CREATE (bob)-[:FRIENDS_WITH]->(carol)
+# RETURN alice, bob, carol
+# """
+# query = ""
+# for p in path:
+#     print(p)
+#     query = query + "MERGE (AS"+str(p)+":ASN {name: 'AS"+str(p)+"'})\n"
+# for i in range(len(path)-1):
+#     query = query + "MERGE (AS"+str(path[i])+")-[:CONNECTED]->(AS"+str(path[i+1])+")\n"
+# #query = query + "CREATE (AS"+str(path[0])+")-[:CONNECTED]->(AS"+str(path[1])+")\n"
+# print(query)
+# result = run_query(query)
 # Вызываем функцию для выполнения запроса
-result = run_query(query)
+#result = run_query(query)
 
 # Выводим результат на экран
 # for record in result:
