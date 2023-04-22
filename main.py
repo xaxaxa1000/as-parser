@@ -1,6 +1,7 @@
 import requests # Библиотека для работы с запросами
 import json # Библиотека для работы с json
 import psycopg2 # Библиотека для работы с Postgresql
+from neo4j import GraphDatabase
 
 # Создаем соединение
 conn = psycopg2.connect(
@@ -96,5 +97,32 @@ cur.close()
 conn.close()
 
 
+
+#тест
+
+driver = GraphDatabase.driver("neo4j://localhost:7687", auth=("12345678", "12345678"))
+def run_query(query):
+    # Используем контекстный менеджер для управления сессией
+    with driver.session() as session:
+        # Выполняем запрос и возвращаем результат
+        return session.run(query)
+
+# Пример запроса для создания узлов и связей в графе
+
+query = """
+CREATE (alice:Person {name: 'Alice', age: 25})
+CREATE (bob:Person {name: 'Bob', age: 30})
+CREATE (carol:Person {name: 'Carol', age: 35})
+CREATE (alice)-[:FRIENDS_WITH]->(bob)
+CREATE (bob)-[:FRIENDS_WITH]->(carol)
+RETURN alice, bob, carol
+"""
+
+# Вызываем функцию для выполнения запроса
+result = run_query(query)
+
+# Выводим результат на экран
+# for record in result:
+#     print(record)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
