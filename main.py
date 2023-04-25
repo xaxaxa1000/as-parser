@@ -88,14 +88,14 @@ insert_query = """ INSERT INTO autonomous_system (asn, prefix,source_id,ts, path
 url_all_as = 'https://stat-ui.stat.ripe.net/data/ris-asns/data.json?list_asns=true'
 response = requests.get(url_all_as)
 all_as_data = response.json()
-# ЧТОБЫ ЗАПОЛНЯТЬ ТАБЛИЦУ all_autonomous_system раскомендить тут
-# for i in range(len(all_as_data['data']['asns'])):
-#     asn = all_as_data['data']['asns'][i]
-#     # Создается запрос
-#     cur.execute(insert_all_as_query, [asn])
-#     # Выполняется соединение
-#     conn.commit()
-#     print("добавлена "+str(i)+ " as из "+str(all_as_data['data']['counts']['total']))
+#ЧТОБЫ ЗАПОЛНЯТЬ ТАБЛИЦУ all_autonomous_system раскомендить тут
+for i in range(len(all_as_data['data']['asns'])):
+    asn = all_as_data['data']['asns'][i]
+    # Создается запрос
+    cur.execute(insert_all_as_query, [asn])
+    # Выполняется соединение
+    conn.commit()
+    print("добавлена "+str(i)+ " as из "+str(all_as_data['data']['counts']['total']))
 connection_data = set()
 for i in range(len(all_as_data['data']['asns'])):
     asn = all_as_data['data']['asns'][i]
@@ -104,7 +104,7 @@ for i in range(len(all_as_data['data']['asns'])):
     # print(url_some_as)
 
     # Выполняется запрос
-    response = requests.get(url_some_as)
+    response = requests.get(url_some_as,timeout=5)
     # Ответ запроса преобразуется в json
     try:
         data = response.json()
