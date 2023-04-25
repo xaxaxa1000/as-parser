@@ -1,9 +1,16 @@
-import requests # Библиотека для работы с запросами
-import json # Библиотека для работы с json
-import psycopg2 # Библиотека для работы с Postgresql
+import requests  # Библиотека для работы с запросами
+import json  # Библиотека для работы с json
+import psycopg2  # Библиотека для работы с Postgresql
 from neo4j import GraphDatabase
+import pandas
+import random
+import time
+
+# database="<DB NAME>"
 
 driver = GraphDatabase.driver("neo4j://localhost:7687", auth=("12345678", "12345678"))
+
+
 def run_query(query):
     # Используем контекстный менеджер для управления сессией
     with driver.session() as session:
@@ -19,7 +26,7 @@ conn = psycopg2.connect(
     password="12345"
 )
 
-conn.autocommit = True # чтобы выполнить CREATE DATABASE вне транзакции
+conn.autocommit = True  # чтобы выполнить CREATE DATABASE вне транзакции
 cur = conn.cursor()
 # Создаем базу данных autonomous_system если она не создана
 try:
@@ -37,13 +44,15 @@ conn = psycopg2.connect(
     user="postgres",
     password="12345"
 )
-conn.autocommit = True # чтобы выполнить CREATE DATABASE вне транзакции
+conn.autocommit = True  # чтобы выполнить CREATE DATABASE вне транзакции
 cur = conn.cursor()
 try:
     cur.execute("DROP TABLE autonomous_system")
+    cur.execute("DROP TABLE all_autonomous_system")
+    cur.execute("DROP TABLE connection")
 except Exception as e:
     print(e)
-#timestamp  without time zone
+# timestamp  without time zone
 try:
     cur.execute("""CREATE TABLE autonomous_system(
     id SERIAL PRIMARY KEY,
@@ -52,136 +61,112 @@ try:
     source_id CHARACTER VARYING(43),
     ts timestamp NOT NULL,
     path_to_asn INTEGER []
-);""")
+    );""")
 
+    cur.execute("""CREATE TABLE all_autonomous_system(
+    id SERIAL PRIMARY KEY,
+    asn BIGINT
+    );""")
+
+    cur.execute("""CREATE TABLE connection(
+            asn1 BIGINT,
+            asn2 BIGINT
+            );""")
+    # cur.execute("""CREATE TABLE connection(
+    #     id SERIAL PRIMARY KEY,
+    #     asn1 BIGINT,
+    #     asn2 BIGINT
+    #     );""")
 except Exception as e:
     print(e)
 
-
+# РАСКОМЕНДИТЬ ТУТ
+insert_connection_query = """ INSERT INTO connection (asn1,asn2) VALUES (%s,%s)"""
+insert_all_as_query = """ INSERT INTO all_autonomous_system (asn) VALUES (%s)"""
 insert_query = """ INSERT INTO autonomous_system (asn, prefix,source_id,ts, path_to_asn) VALUES (%s,%s,%s,%s,%s)"""
 # Getting a list of all AS
 url_all_as = 'https://stat-ui.stat.ripe.net/data/ris-asns/data.json?list_asns=true'
 response = requests.get(url_all_as)
 all_as_data = response.json()
+# ЧТОБЫ ЗАПОЛНЯТЬ ТАБЛИЦУ all_autonomous_system раскомендить тут
+# for i in range(len(all_as_data['data']['asns'])):
+#     asn = all_as_data['data']['asns'][i]
+#     # Создается запрос
+#     cur.execute(insert_all_as_query, [asn])
+#     # Выполняется соединение
+#     conn.commit()
+#     print("добавлена "+str(i)+ " as из "+str(all_as_data['data']['counts']['total']))
+connection_data = set()
 for i in range(len(all_as_data['data']['asns'])):
     asn = all_as_data['data']['asns'][i]
-    #print(asn)
-    url_some_as = 'https://stat.ripe.net/data/bgp-state/data.json?resource=AS'+str(asn)
-    #print(url_some_as)
+    print("AS" + str(asn))
+    url_some_as = 'https://stat.ripe.net/data/bgp-state/data.json?resource=AS' + str(asn)
+    # print(url_some_as)
 
-    #url = 'https://stat.ripe.net/data/bgp-state/data.json?resource=AS2002'
-    #Выполняется запрос
+    # Выполняется запрос
     response = requests.get(url_some_as)
-    #Ответ запроса преобразуется в json
-    data = response.json()
-    #ASN
+    # Ответ запроса преобразуется в json
+    try:
+        data = response.json()
+    except Exception as e:
+        print(e)
+    # ASN
     current_as = data['data']['resource']
-    #Время записи
-    timestamp=data['time']
-    print(timestamp)
+
+    # Время записи
+    timestamp = data['time']
+    # print(timestamp)
+    # if(connection_data.empty==False):
+    #    connection_data.drop_duplicates(subset=["path_from", "path_to"], inplace=True)
+    connection_data.clear()
     for j in range(len(data['data']['bgp_state'])):
-        #Префикс
-        prefix = data['data']['bgp_state'][j]['target_prefix']
-        #Source id
-        source_id = data['data']['bgp_state'][j]['source_id']
-        #Путь
-        path = data['data']['bgp_state'][j]['path']
-        #Путь преобразуется в массив для записи в бд
-        path_array = "{" + ", ".join(str(x) for x in path) + "}"
-        #Формируется запись
-        record_to_insert = (current_as, prefix,source_id, timestamp, path_array)
-        #Создается запрос
-        cur.execute(insert_query, record_to_insert)
-        #Выполняется соединение
-        conn.commit()
-        count = cur.rowcount
-        print(count, "Запись успешно добавлена в таблицу users")
-        query = ""
-        for p in path:
-            print(p)
-            query = query + "MERGE (AS" + str(p) + ":ASN {name: 'AS" + str(p) + "'})\n"
-        for k in range(len(path) - 1):
-            query = query + "MERGE (AS" + str(path[k]) + ")-[:CONNECTED]-(AS" + str(path[k + 1]) + ")\n"
-            # query = query + "CREATE (AS"+str(path[0])+")-[:CONNECTED]->(AS"+str(path[1])+")\n"
-        print(query)
-        result = run_query(query)
+        # ТЕСТИРУЮ ТУТ--------------------------------------------------------------
+        # print("длина маршрута "+str(len(data['data']['bgp_state'][j]['path'])))
+        path_length = len(data['data']['bgp_state'][j]['path'])
+        # path_to = data['data']['bgp_state'][j]['path'][path_length - 1]
+        # path_from = data['data']['bgp_state'][j]['path'][path_length - 2]
 
-#ТЕСТОВЫЙ КОД УДАЛЯТЬ ТУТ---------------------------------------------------------------
-# url = 'https://stat.ripe.net/data/bgp-state/data.json?resource=AS2002'
-#     #Выполняется запрос
-# response = requests.get(url)
-#     #Ответ запроса преобразуется в json
-# data = response.json()
-#     #ASN
-# current_as = data['data']['resource']
-#     #Время записи
-# timestamp=data['time']
-# print(timestamp)
-# for j in range(len(data['data']['bgp_state'])):
-#         #Префикс
-#     prefix = data['data']['bgp_state'][j]['target_prefix']
-#         #Source id
-#     source_id = data['data']['bgp_state'][j]['source_id']
-#         #Путь
-#     path = data['data']['bgp_state'][j]['path']
-#         #Путь преобразуется в массив для записи в бд
-#     path_array = "{" + ", ".join(str(x) for x in path) + "}"
-#
-#     query = ""
-#     for p in path:
-#         print(p)
-#         query = query + "MERGE (AS" + str(p) + ":ASN {name: 'AS" + str(p) + "'})\n"
-#     for i in range(len(path) - 1):
-#         query = query + "MERGE (AS" + str(path[i]) + ")-[:CONNECTED]->(AS" + str(path[i + 1]) + ")\n"
-#         # query = query + "CREATE (AS"+str(path[0])+")-[:CONNECTED]->(AS"+str(path[1])+")\n"
-#     print(query)
-#     result = run_query(query)
-        #Формируется запись
-        #record_to_insert = (current_as, prefix,source_id, timestamp, path_array)
-        #Создается запрос
-        #cur.execute(insert_query, record_to_insert)
-        #Выполняется соединение
-        #conn.commit()
-        #count = cur.rowcount
-        #print(count, "Запись успешно добавлена в таблицу users")
+        try:
+            index_path_to = data['data']['bgp_state'][j]['path'].index(int(current_as))
+            path_to = data['data']['bgp_state'][j]['path'][index_path_to]
+            path_from = data['data']['bgp_state'][j]['path'][index_path_to - 1]
+            if (path_to < path_from):
+                connection_data.add((path_to, path_from))
+                # cur.execute(insert_connection_query, [path_to,path_from])
+            if (path_to > path_from):
+                connection_data.add((path_to, path_from))
+                # cur.execute(insert_connection_query, [path_from,path_to])
+        except Exception as e:
+            print(e)
+        #path_to = data['data']['bgp_state'][j]['path'][index_path_to]
+        #path_from = data['data']['bgp_state'][j]['path'][index_path_to-1]
 
-#ТЕСТОВЫЙ КОД УДАЛЯТЬ ТУТ---------------------------------------------------------------
+        #print(str(path_to)+"       \n"+str(path_from))
+
+    try:
+        cur.executemany(insert_connection_query, connection_data)
+    except Exception as e:
+        print(e)
 
 
+    # ТЕСТИРУЮ ТУТ--------------------------------------------------------------
+    # ЧТОБЫ ЗАПОЛНИТЬ ТАБЛИЦУ autonomous_system раскомендить тут
+    # #Префикс
+    # prefix = data['data']['bgp_state'][j]['target_prefix']
+    # #Source id
+    # source_id = data['data']['bgp_state'][j]['source_id']
+    # #Путь
+    # path = data['data']['bgp_state'][j]['path']
+    # #Путь преобразуется в массив для записи в бд
+    # path_array = "{" + ", ".join(str(x) for x in path) + "}"
+    # #Формируется запись в postgresql
+    # record_to_insert = (current_as, prefix,source_id, timestamp, path_array)
+    # #Создается запрос
+    # cur.execute(insert_query, record_to_insert)
+    # #Выполняется соединение
+    # conn.commit()
+    # count = cur.rowcount
+    # #print(count, "Запись успешно добавлена в таблицу users")
 
-#РАСКОМЕНДИТЬ ТУТ----------------------------------!!!!!!!!!!!!!1-------------------------
-#cur.close()
-#conn.close()
-
-
-
-#тест
-
-
-# Пример запроса для создания узлов и связей в графе
-
-# query = """
-# CREATE (alice:Person {name: 'Alice', age: 25})
-# CREATE (bob:Person {name: 'Bob', age: 30})
-# CREATE (carol:Person {name: 'Carol', age: 35})
-# CREATE (alice)-[:FRIENDS_WITH]->(bob)
-# CREATE (bob)-[:FRIENDS_WITH]->(carol)
-# RETURN alice, bob, carol
-# """
-# query = ""
-# for p in path:
-#     print(p)
-#     query = query + "MERGE (AS"+str(p)+":ASN {name: 'AS"+str(p)+"'})\n"
-# for i in range(len(path)-1):
-#     query = query + "MERGE (AS"+str(path[i])+")-[:CONNECTED]->(AS"+str(path[i+1])+")\n"
-# #query = query + "CREATE (AS"+str(path[0])+")-[:CONNECTED]->(AS"+str(path[1])+")\n"
-# print(query)
-# result = run_query(query)
-# Вызываем функцию для выполнения запроса
-#result = run_query(query)
-
-# Выводим результат на экран
-# for record in result:
-#     print(record)
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+cur.close()
+conn.close()
