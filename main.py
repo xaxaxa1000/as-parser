@@ -95,16 +95,16 @@ for i in range(len(all_as_data['data']['asns'])):
     cur.execute(insert_all_as_query, [asn])
     # Выполняется соединение
     conn.commit()
-    print("добавлена "+str(i)+ " as из "+str(all_as_data['data']['counts']['total']))
+    if i%1000==0:
+        print("Добавлено вершин "+str(i)+"/"+str(all_as_data['data']['counts']['total']))
 connection_data = set()
 for i in range(len(all_as_data['data']['asns'])):
     asn = all_as_data['data']['asns'][i]
-    print("AS" + str(asn))
     url_some_as = 'https://stat.ripe.net/data/bgp-state/data.json?resource=AS' + str(asn)
     # print(url_some_as)
 
     # Выполняется запрос
-    response = requests.get(url_some_as,timeout=5)
+    response = requests.get(url_some_as)
     # Ответ запроса преобразуется в json
     try:
         data = response.json()
@@ -127,14 +127,17 @@ for i in range(len(all_as_data['data']['asns'])):
         # path_from = data['data']['bgp_state'][j]['path'][path_length - 2]
 
         try:
-            index_path_to = data['data']['bgp_state'][j]['path'].index(int(current_as))
-            path_to = data['data']['bgp_state'][j]['path'][index_path_to]
-            path_from = data['data']['bgp_state'][j]['path'][index_path_to - 1]
-            if (path_to < path_from):
-                connection_data.add((path_to, path_from))
+            for t in range(len(data['data']['bgp_state'][j]['path'])):
+                #index_path_to = data['data']['bgp_state'][j]['path'].index(int(current_as))
+                #path_to = data['data']['bgp_state'][j]['path'][index_path_to]
+                #path_from = data['data']['bgp_state'][j]['path'][index_path_to - 1]
+                path_from = data['data']['bgp_state'][j]['path'][t-1]
+                path_to = data['data']['bgp_state'][j]['path'][t]
+                if (path_to < path_from):
+                    connection_data.add((path_to, path_from))
                 # cur.execute(insert_connection_query, [path_to,path_from])
-            if (path_to > path_from):
-                connection_data.add((path_to, path_from))
+                if (path_to > path_from):
+                    connection_data.add((path_from,path_to))
                 # cur.execute(insert_connection_query, [path_from,path_to])
         except Exception as e:
             print(e)
@@ -145,8 +148,12 @@ for i in range(len(all_as_data['data']['asns'])):
 
     try:
         cur.executemany(insert_connection_query, connection_data)
+        cur.execute(
+            """DELETE FROM connection WHERE ctid NOT IN (SELECT max(ctid) FROM connection GROUP BY connection.*);""")
     except Exception as e:
         print(e)
+    print("Добавлено связей " + str(i) + "/" + str(len(all_as_data['data']['asns']))+" AS" + str(asn))
+
 
 
     # ТЕСТИРУЮ ТУТ--------------------------------------------------------------
