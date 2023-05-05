@@ -52,8 +52,11 @@ countries = ["AU", "AT", "AZ", "AX", "AL", "DZ", "VI", "AS", "AI", "AO", "AD", "
              "TJ", "TH", "TZ", "TC", "TG", "TK", "TO", "TT", "TV", "TN", "TM", "TR", "UG", "UZ", "UA", "WF", "UY",
              "FO", "FJ", "PH", "FI", "FK", "FR", "PF", "TF", "HM", "HR", "CF", "TD", "ME", "CZ", "CL", "CH", "SE",
              "SJ", "LK", "EC", "GQ", "ER", "EE", "ET", "ZA", "GS", "SS", "JM", "JP"]
-print("1. Парсить все автономные системы(~1 min)\n2. Парсить все автономные системы по странам(~4 min)\n3. Парсить все автономные системы по странам с координатами(~3 min)\n4. Парсить соединения (~ОЧЕНЬ МНОГО min)")
+
 while True:
+    print("1. Парсить все автономные системы(~1 min)\n2. Парсить все автономные системы по странам(~4 min)\n"
+          "3. Парсить все автономные системы по странам с координатами(~3 min)\n"
+          "4. Парсить соединения (~ОЧЕНЬ МНОГО min)\n5. Очистить лишние as")
     answer = input("\nВыберите пункт: ")
     if answer == "1":
         conn = psycopg2.connect(
@@ -190,7 +193,10 @@ while True:
             print("\rДобавлено %s стран из %s" % (count, len(countries)), end="")
             count = count + 1
             conn.commit()
-
+        cur.execute("""delete from all_as_with_country_and_coord a
+                        using all_as_with_country_and_coord b
+                        where a.id < b.id
+                        and a.asn = b.asn;""")
         cur.close()
         conn.close()
                     #asn=all_as_data['data']['probes']['asn'][i]
@@ -258,9 +264,35 @@ while True:
                 print(e)
             print("Добавлено связей " + str(count) + "/" + str(len(asns)) + " AS" + str(asn[0]))
             count=count+1
+        cur.close()
+        conn.close()
 
 
-
+    elif answer == "5":
+        conn = psycopg2.connect(
+            host="localhost",
+            database="autonomous_system",
+            user="postgres",
+            password="12345"
+        )
+        conn.autocommit = True  # чтобы выполнить CREATE DATABASE вне транзакции
+        cur = conn.cursor()
+        cur.execute("""delete from all_as_with_country_and_coord a
+                        using all_as_with_country_and_coord b
+                        where a.id < b.id
+                        and a.asn = b.asn""")
+        cur.execute("""delete from connection
+                        where not exists (
+                        select 1
+                        from all_as_with_country_and_coord
+                        where all_as_with_country_and_coord.asn = connection.asn1)""")
+        cur.execute("""delete from connection
+                                where not exists (
+                                select 1
+                                from all_as_with_country_and_coord
+                                where all_as_with_country_and_coord.asn = connection.asn2)""")
+        cur.close()
+        conn.close()
     else:
         print("wrong input")
 
